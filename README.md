@@ -4,7 +4,7 @@ Public React/Vite annotator portal deployed at `https://lecmirror.github.io`.
 
 Every authenticated user can upload a pre-lecture PDF, edit the lecture name (defaulting to the filename), monitor the pipeline, view pre/post reports, and label every feedback item for lectures they own or were assigned. Administrators can see all lectures, retry failures, and grant labeler access.
 
-The browser uploads PDFs directly to private Cloudflare R2 using short-lived presigned URLs. Files of 100 MiB or more use 16 MiB multipart chunks with per-part retry. Slide image download URLs refresh before their ten-minute expiry. Final feedback is loaded directly from Supabase JSONB. Supabase Storage is not used.
+The browser uploads PDFs directly to Cloudflare R2 using short-lived presigned write URLs. Files of 100 MiB or more use 16 MiB multipart chunks with per-part retry. When `VITE_R2_PUBLIC_BASE_URL` is configured, PDFs and generated images use direct public read URLs; otherwise the app falls back to ten-minute signed reads. Final feedback is loaded directly from Supabase JSONB. Supabase Storage is not used.
 
 ## Local development
 

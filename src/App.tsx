@@ -18,7 +18,7 @@ import {
   X,
 } from 'lucide-react';
 import { supabase } from './lib/supabase';
-import { lectureNameFromFile, signAsset, uploadPreLecture } from './lib/upload';
+import { lectureNameFromFile, resolveAssetUrl, uploadPreLecture } from './lib/upload';
 import type { AssetMapping, FeedbackSegment, Lecture, PipelineJob } from './types';
 
 type View = { kind: 'dashboard' } | { kind: 'lecture'; lecture: Lecture };
@@ -276,7 +276,10 @@ function FeedbackWorkspace({ lecture, onBack }: { lecture: Lecture; onBack: () =
         supabase.from('asset_mappings').select('*').eq('run_id', runId).eq('asset_type', 'slide_image').eq('status', 'ready').order('page_number'),
       ]);
       setSegments((feedbackResponse.data || []) as FeedbackSegment[]);
-      const mapped = await Promise.all(((assetResponse.data || []) as AssetMapping[]).map(async (mapping) => ({ mapping, url: await signAsset(mapping.id) })));
+      const mapped = await Promise.all(((assetResponse.data || []) as AssetMapping[]).map(async (mapping) => ({
+        mapping,
+        url: await resolveAssetUrl(mapping.id, mapping.object_key),
+      })));
       setImages(mapped); setActive(0);
     }
     void load();

@@ -119,7 +119,14 @@ export async function uploadPreLecture(
   return { lectureId: data.lectureId, jobId: data.jobId };
 }
 
-export async function signAsset(mappingId: string): Promise<string> {
+const r2PublicBaseUrl = import.meta.env.VITE_R2_PUBLIC_BASE_URL?.replace(/\/$/, '');
+
+export async function resolveAssetUrl(mappingId: string, objectKey: string): Promise<string> {
+  if (r2PublicBaseUrl) {
+    const encodedKey = objectKey.split('/').map(encodeURIComponent).join('/');
+    return `${r2PublicBaseUrl}/${encodedKey}`;
+  }
+
   const { data, error } = await supabase.functions.invoke<{ url: string }>('r2-sign-download', {
     body: { mappingId },
   });
