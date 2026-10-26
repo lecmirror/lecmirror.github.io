@@ -18,21 +18,11 @@ import {
   X,
 } from 'lucide-react';
 import { supabase } from './lib/supabase';
+import { isProcessingJob, jobDisplayLabel } from './lib/stages';
 import { lectureNameFromFile, resolveAssetUrl, uploadPreLecture } from './lib/upload';
 import type { AssetMapping, FeedbackSegment, Lecture, PipelineJob } from './types';
 
 type View = { kind: 'dashboard' } | { kind: 'lecture'; lecture: Lecture };
-
-const jobLabel: Record<string, string> = {
-  uploading: 'Uploading',
-  staging: 'Preparing',
-  queued: 'Queued',
-  claimed: 'Starting',
-  running: 'Generating feedback',
-  succeeded: 'Ready',
-  failed: 'Needs attention',
-  cancelled: 'Cancelled',
-};
 
 function Logo() {
   return (
@@ -86,7 +76,7 @@ function Login() {
 
 function StatusPill({ job }: { job?: PipelineJob }) {
   const status = job?.status || 'succeeded';
-  return <span className={`status-pill status-${status}`}>{status === 'succeeded' && <Check size={13} />}{jobLabel[status] || status}</span>;
+  return <span className={`status-pill status-${status}`}>{status === 'succeeded' && <Check size={13} />}{jobDisplayLabel(job)}</span>;
 }
 
 function UploadDialog({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: () => void }) {
@@ -161,7 +151,7 @@ function LectureCard({ lecture, onOpen }: { lecture: Lecture; onOpen: () => void
       <div className="lecture-card-body">
         <div className="card-heading"><div><span className="card-kicker">Lecture</span><h3>{lecture.display_name}</h3></div><ChevronRight size={20} /></div>
         <div className="badges">{hasPre && <span className="report-badge pre">PRE</span>}{hasPost && <span className="report-badge post">POST</span>}<StatusPill job={latestJob} /></div>
-        {latestJob && latestJob.status === 'running' && <div className="mini-progress"><span style={{ width: `${latestJob.progress}%` }} /></div>}
+        {isProcessingJob(latestJob) && <div className="stage-progress"><div className="stage-progress-meta"><span>{jobDisplayLabel(latestJob)}</span><strong>{latestJob?.progress || 0}%</strong></div><div className="mini-progress"><span style={{ width: `${Math.min(100, Math.max(0, latestJob?.progress || 0))}%` }} /></div></div>}
         <div className="card-footer"><Clock3 size={14} /> {new Date(lecture.created_at).toLocaleDateString()}</div>
       </div>
     </button>
