@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, ChevronLeft, ChevronRight, LogOut, MessageSquareText, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { resolveAssetUrl } from '../lib/upload';
+import { MathText } from './MathText';
 import {
   asRecord,
   displayFeedbackBody,
@@ -112,9 +113,9 @@ function FeedbackCards({
                       {item.slideIds.map((slideId) => <button type="button" key={slideId} onClick={() => onSlide(slideId)}>Slide {slideId}</button>)}
                     </div>
                   )}
-                  {problem && problem !== body && <><strong>Problem:</strong><p className="feedback-problem">{problem}</p></>}
+                  {problem && problem !== body && <><strong>Problem:</strong><p className="feedback-problem"><MathText>{cleanReferences(problem)}</MathText></p></>}
                   <strong>{item.category === 'questions' ? 'Question:' : item.category === 'slides_feedback' ? 'Problem/Feedback:' : 'Suggestion:'}</strong>
-                  <p className="feedback-bullet">{body || 'No specific suggestion provided.'}</p>
+                  <p className="feedback-bullet"><MathText>{body || 'No specific suggestion provided.'}</MathText></p>
                   <RatingControls item={item} values={ratings[item.itemKey] || {}} onRate={onRate} />
                 </article>
               );
@@ -135,7 +136,7 @@ function LogicFlow({ feedback }: { feedback: JsonRecord }) {
     const start = String(value.start ?? value.source ?? '?');
     const end = String(value.end ?? value.target ?? '?');
     const relation = String(value.relationship ?? value.relation ?? 'connects to');
-    return <div className="logic-edge" key={`${start}-${end}-${index}`}><span>{start}</span><em>{relation}</em><span>{end}</span></div>;
+    return <div className="logic-edge" key={`${start}-${end}-${index}`}><span><MathText>{start}</MathText></span><em><MathText>{relation}</MathText></em><span><MathText>{end}</MathText></span></div>;
   }) : <div className="feedback-empty compact">{empty}</div>;
   return (
     <details className="logic-flow" open>
@@ -310,7 +311,7 @@ export function FeedbackWorkspace({ lecture, onBack }: { lecture: Lecture; onBac
               return (
                 <section className={`annotation-segment-group ${segmentIndex === activeSegmentIndex ? 'active' : ''}`} key={segment.id}>
                   <button className="segment-summary" onClick={() => selectSlide(segmentIndex, segment.startId)}>
-                    <span className="part-badge">Part {segment.part}</span><strong>{segment.description}</strong>
+                    <span className="part-badge">Part {segment.part}</span><strong><MathText>{segment.description}</MathText></strong>
                     <span className="segment-meta"><span>Slides {segment.startId} - {segment.endId}</span>{commentCount > 0 && <em>{commentCount} comments</em>}</span>
                   </button>
                   <div className="segment-actions"><button onClick={() => setModal({ kind: 'feedback', segmentIndex })}>Segment Feedback</button>{questions.length > 0 && <button onClick={() => setModal({ kind: 'questions', segmentIndex })}>Student Question</button>}</div>
@@ -333,7 +334,7 @@ export function FeedbackWorkspace({ lecture, onBack }: { lecture: Lecture; onBac
 
         <main className="annotation-main">
           <section className="annotation-workspace-topbar">
-            <div><div className="workspace-kicker">{lecture.display_name}</div><h1>{activeSegment ? `Part ${activeSegment.part}: Slide ${activeSlideId}` : 'Select a segment'}</h1><p>{activeSegment ? `${activeSegment.description} | Slides ${activeSegment.startId}-${activeSegment.endId}` : 'Review the current slide, transcript, and segment feedback in one workspace.'}</p></div>
+            <div><div className="workspace-kicker">{lecture.display_name}</div><h1>{activeSegment ? `Part ${activeSegment.part}: Slide ${activeSlideId}` : 'Select a segment'}</h1><p>{activeSegment ? <><MathText>{activeSegment.description}</MathText><span> | Slides {activeSegment.startId}-{activeSegment.endId}</span></> : 'Review the current slide, transcript, and segment feedback in one workspace.'}</p></div>
             <div className="annotation-toolbar">
               {hasValidation && <WorkspaceToggle checked={validated} onChange={setValidated} label="Validation" />}
               {hasTranscriptCoverage && <WorkspaceToggle checked={showTranscriptCoverage} onChange={setShowTranscriptCoverage} label="Transcript Coverage" />}
@@ -357,7 +358,7 @@ export function FeedbackWorkspace({ lecture, onBack }: { lecture: Lecture; onBac
                     <div className="slide-stage-meta"><div><h2>Slide {activeSlideId}</h2><p>Segment {activeSegment.part} of {segments.length} | Deck page {activeSlideId + 1}</p></div>{slideItems.length > 0 && <span><MessageSquareText size={15} />{slideItems.length} comments</span>}</div>
                     <div className="slide-stage-frame">{activeImage ? <img src={activeImage.url} alt={`Slide ${activeSlideId}`} /> : <div className="missing-slide">No slide image is available.</div>}</div>
                   </section>
-                  <section className="annotation-panel-card"><div className="panel-header"><div><h3>Transcript</h3><p>Current slide description and extracted talk track.</p></div></div><div className="transcript-content"><strong>Topic Description</strong><p>{topicDescription || 'No description provided.'}</p><strong>Transcript</strong><p>{transcript || 'No specific transcript data extracted for this slide block.'}</p></div></section>
+                  <section className="annotation-panel-card"><div className="panel-header"><div><h3>Transcript</h3><p>Current slide description and extracted talk track.</p></div></div><div className="transcript-content"><strong>Topic Description</strong><p><MathText>{topicDescription || 'No description provided.'}</MathText></p><strong>Transcript</strong><p><MathText>{transcript || 'No specific transcript data extracted for this slide block.'}</MathText></p></div></section>
                 </div>
                 <aside className="annotation-panel-card feedback-panel"><div className="panel-header"><div><h3>Slide Feedback</h3><p>Feedback specific to this page.</p></div></div><FeedbackCards items={slideItems} ratings={ratings} onRate={rate} onSlide={goToSlide} /></aside>
               </div>
@@ -370,7 +371,7 @@ export function FeedbackWorkspace({ lecture, onBack }: { lecture: Lecture; onBac
         <div className="annotation-modal-backdrop" role="dialog" aria-modal="true" onClick={() => setModal(null)}>
           <div className="annotation-modal" onClick={(event) => event.stopPropagation()}>
             <button className="annotation-modal-close" aria-label="Close" onClick={() => setModal(null)}><X size={22} /></button>
-            <h2>Segment {modalSegment.part} {modal.kind === 'questions' ? 'Student Questions' : 'Feedback'}</h2><p>{modalSegment.description}</p>
+            <h2>Segment {modalSegment.part} {modal.kind === 'questions' ? 'Student Questions' : 'Feedback'}</h2><p><MathText>{modalSegment.description}</MathText></p>
             <FeedbackCards items={modalItems} ratings={ratings} onRate={rate} onSlide={goToSlide} />
             {modal.kind === 'feedback' && <LogicFlow feedback={asRecord(modalSegment.source.feedback)} />}
           </div>

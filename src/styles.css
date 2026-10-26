@@ -186,6 +186,11 @@ select { width:100%; border:1px solid var(--line); border-radius:11px; padding:1
 .feedback-entry:last-child { padding-bottom:0;border-bottom:0; }
 .feedback-entry>strong { display:block;font-size:14px;margin:8px 0 4px;color:#26344c; }
 .feedback-entry p { line-height:1.55;font-size:14px; }
+.math-text { white-space:pre-wrap; }
+.math-expression-inline { display:inline-block;max-width:100%;vertical-align:-0.16em; }
+.math-expression-display { display:block;max-width:100%;overflow-x:auto;overflow-y:hidden;margin:10px 0;padding:2px 0; }
+.math-expression-display .katex-display { margin:0; }
+.math-expression .katex { font-size:1.04em; }
 .feedback-problem { color:#607089;margin:0 0 8px;white-space:pre-wrap; }
 .feedback-bullet { margin:0 0 8px;position:relative;padding-left:16px;white-space:pre-wrap; }
 .feedback-bullet::before { content:'•';position:absolute;left:0;color:#607089;font-weight:700; }
