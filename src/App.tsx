@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import {
-  ArrowLeft,
   BookOpen,
   Check,
   ChevronRight,
@@ -17,10 +16,11 @@ import {
   UserPlus,
   X,
 } from 'lucide-react';
+import { FeedbackWorkspace } from './components/FeedbackWorkspace';
 import { supabase } from './lib/supabase';
 import { isProcessingJob, jobDisplayLabel } from './lib/stages';
-import { lectureNameFromFile, resolveAssetUrl, uploadPreLecture } from './lib/upload';
-import type { AssetMapping, FeedbackSegment, Lecture, PipelineJob } from './types';
+import { lectureNameFromFile, uploadPreLecture } from './lib/upload';
+import type { Lecture, PipelineJob } from './types';
 
 type View = { kind: 'dashboard' } | { kind: 'lecture'; lecture: Lecture };
 
@@ -212,85 +212,6 @@ function Dashboard({ session, onOpen }: { session: Session; onOpen: (lecture: Le
       </main>
       <UploadDialog open={uploadOpen} onClose={() => setUploadOpen(false)} onCreated={load} />
     </>
-  );
-}
-
-type FeedbackItem = { key: string; category: string; body: string; segmentIndex: number };
-
-function flattenFeedback(segments: FeedbackSegment[]): FeedbackItem[] {
-  const items: FeedbackItem[] = [];
-  for (const segment of segments) {
-    for (const [category, value] of Object.entries(segment.feedback || {})) {
-      if (!Array.isArray(value)) continue;
-      value.forEach((entry, index) => {
-        const body = typeof entry === 'string' ? entry : String((entry as Record<string, unknown>)?.feedback || (entry as Record<string, unknown>)?.report_info || (entry as Record<string, unknown>)?.summary || JSON.stringify(entry));
-        items.push({ key: `${segment.id}:${category}:${index}`, category, body, segmentIndex: segment.segment_index });
-      });
-    }
-  }
-  return items;
-}
-
-function Rating({ runId, itemKey, dimension, label }: { runId: string; itemKey: string; dimension: string; label: string }) {
-  const [value, setValue] = useState<number | null>(null);
-  useEffect(() => {
-    async function loadRating() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const { data } = await supabase.from('feedback_ratings').select(dimension).eq('user_id', user.id).eq('run_id', runId).eq('item_key', itemKey).maybeSingle();
-      const existing = data?.[dimension as keyof typeof data];
-      setValue(typeof existing === 'number' ? existing : null);
-    }
-    void loadRating();
-  }, [runId, itemKey, dimension]);
-
-  async function rate(next: number) {
-    setValue(next);
-    await supabase.rpc('set_feedback_rating', { p_run_id: runId, p_item_key: itemKey, p_dimension: dimension, p_value: next });
-  }
-  return <div className="rating-row"><span>{label}</span><div>{[0, 1, 2, 3, 4].map((score) => <button key={score} className={value === score ? 'selected' : ''} onClick={() => rate(score)}>{score}</button>)}</div></div>;
-}
-
-function FeedbackWorkspace({ lecture, onBack }: { lecture: Lecture; onBack: () => void }) {
-  const [mode, setMode] = useState<'pre' | 'post'>(lecture.active_post_run_id ? 'post' : 'pre');
-  const [segments, setSegments] = useState<FeedbackSegment[]>([]);
-  const [images, setImages] = useState<Array<{ mapping: AssetMapping; url: string }>>([]);
-  const [active, setActive] = useState(0);
-  const runId = mode === 'pre' ? lecture.active_pre_run_id : lecture.active_post_run_id;
-
-  useEffect(() => {
-    async function load() {
-      if (!runId) { setSegments([]); setImages([]); return; }
-      const [feedbackResponse, assetResponse] = await Promise.all([
-        supabase.from('feedback_segments').select('*').eq('run_id', runId).order('segment_index'),
-        supabase.from('asset_mappings').select('*').eq('run_id', runId).eq('asset_type', 'slide_image').eq('status', 'ready').order('page_number'),
-      ]);
-      setSegments((feedbackResponse.data || []) as FeedbackSegment[]);
-      const mapped = await Promise.all(((assetResponse.data || []) as AssetMapping[]).map(async (mapping) => ({
-        mapping,
-        url: await resolveAssetUrl(mapping.id, mapping.object_key),
-      })));
-      setImages(mapped); setActive(0);
-    }
-    void load();
-    const refresh = window.setInterval(() => void load(), 8 * 60 * 1000);
-    return () => window.clearInterval(refresh);
-  }, [runId]);
-
-  const items = flattenFeedback(segments);
-  const current = items[active];
-  const image = images[Math.min(current?.segmentIndex || 0, Math.max(images.length - 1, 0))];
-
-  return (
-    <div className="workspace-shell">
-      <header className="app-header"><div className="workspace-brand"><button className="icon-button" onClick={onBack}><ArrowLeft size={19} /></button><Logo /><span className="header-divider" /><strong>{lecture.display_name}</strong></div><button className="icon-button" onClick={() => supabase.auth.signOut()}><LogOut size={18} /></button></header>
-      <div className="workspace-toolbar"><div className="mode-switch"><button className={mode === 'pre' ? 'active' : ''} disabled={!lecture.active_pre_run_id} onClick={() => setMode('pre')}>Pre-lecture</button><button className={mode === 'post' ? 'active' : ''} disabled={!lecture.active_post_run_id} onClick={() => setMode('post')}>Post-lecture</button></div><span>{items.length} feedback items</span></div>
-      <main className="workspace-grid">
-        <aside className="feedback-list"><span className="eyebrow">Feedback queue</span>{items.map((item, index) => <button key={item.key} className={active === index ? 'active' : ''} onClick={() => setActive(index)}><span>{index + 1}</span><div><strong>{item.category.replaceAll('_', ' ')}</strong><p>{item.body}</p></div></button>)}</aside>
-        <section className="slide-stage">{image ? <img src={image.url} alt={`Lecture slide ${image.mapping.page_number || ''}`} /> : <div className="empty-slide"><FileText size={36} /><span>No slide image is available yet.</span></div>}</section>
-        <aside className="review-panel">{current && runId ? <><span className="category-chip">{current.category.replaceAll('_', ' ')}</span><h2>Feedback review</h2><p className="feedback-copy">{current.body}</p><div className="rating-card"><h3>Rate this feedback</h3><p>0 means not at all; 4 means excellent.</p><Rating runId={runId} itemKey={current.key} dimension="usefulness" label="Usefulness" /><Rating runId={runId} itemKey={current.key} dimension="correctness" label="Correctness" /><Rating runId={runId} itemKey={current.key} dimension="actionability" label="Actionability" /><Rating runId={runId} itemKey={current.key} dimension="course_alignment" label="Course alignment" /><Rating runId={runId} itemKey={current.key} dimension="question_clarity_readability" label="Clarity & readability" /></div></> : <div className="empty-state compact">Feedback will appear here when processing completes.</div>}</aside>
-      </main>
-    </div>
   );
 }
 
