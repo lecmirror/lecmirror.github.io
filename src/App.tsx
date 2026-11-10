@@ -16,11 +16,12 @@ import {
   UserPlus,
   X,
 } from 'lucide-react';
+import { AdminGroupManager } from './components/AdminGroupManager';
 import { FeedbackWorkspace } from './components/FeedbackWorkspace';
 import { supabase } from './lib/supabase';
 import { isProcessingJob, jobDisplayLabel } from './lib/stages';
 import { lectureNameFromFile, uploadPreLecture } from './lib/upload';
-import type { Lecture, PipelineJob } from './types';
+import type { Lecture, LectureGroup, PipelineJob } from './types';
 
 type View = { kind: 'dashboard' } | { kind: 'lecture'; lecture: Lecture };
 
@@ -79,19 +80,22 @@ function StatusPill({ job }: { job?: PipelineJob }) {
   return <span className={`status-pill status-${status}`}>{status === 'succeeded' && <Check size={13} />}{jobDisplayLabel(job)}</span>;
 }
 
-function UploadDialog({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: () => void }) {
+function UploadDialog({ open, groups, onClose, onCreated }: { open: boolean; groups: LectureGroup[]; onClose: () => void; onCreated: () => void }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState('');
+  const [groupId, setGroupId] = useState('');
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (!open) {
-      setFile(null); setTitle(''); setProgress(0); setError(''); setBusy(false);
+      setFile(null); setTitle(''); setGroupId(''); setProgress(0); setError(''); setBusy(false);
+    } else if (groups.length === 1) {
+      setGroupId(groups[0].id);
     }
-  }, [open]);
+  }, [open, groups]);
 
   function choose(next: File | null) {
     if (!next) return;
@@ -103,9 +107,10 @@ function UploadDialog({ open, onClose, onCreated }: { open: boolean; onClose: ()
 
   async function submit() {
     if (!file) return setError('Choose a PDF to continue.');
+    if (groups.length > 1 && !groupId) return setError('Choose which lecture group should receive this upload.');
     setBusy(true); setError('');
     try {
-      await uploadPreLecture(file, title, setProgress);
+      await uploadPreLecture(file, title, setProgress, groupId || null);
       onCreated(); onClose();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Upload failed.');
@@ -133,6 +138,13 @@ function UploadDialog({ open, onClose, onCreated }: { open: boolean; onClose: ()
           <span>{file ? `${(file.size / 1024 / 1024).toFixed(1)} MB` : 'Private PDF upload · large files resume by part'}</span>
         </button>
         <label className="field-label">Lecture name<input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Introduction to Databases" /></label>
+        {groups.length > 0 ? <label className="field-label">Lecture group
+          <select value={groupId} onChange={(event) => setGroupId(event.target.value)} disabled={groups.length === 1}>
+            {groups.length > 1 && <option value="">Choose a group…</option>}
+            {groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
+          </select>
+          <small className="field-help">Everyone in this group will automatically be able to view and label the lecture.</small>
+        </label> : <p className="upload-access-note">This upload will remain visible to you. An admin can place it in a group later.</p>}
         {busy && <div className="progress-block"><div className="progress-meta"><span>Uploading securely</span><strong>{progress}%</strong></div><div className="progress-track"><span style={{ width: `${progress}%` }} /></div></div>}
         {error && <div className="error-box">{error}</div>}
         <div className="modal-actions"><button className="secondary-button" onClick={onClose} disabled={busy}>Cancel</button><button className="primary-button" onClick={submit} disabled={busy || !file}><Upload size={17} />{busy ? 'Uploading…' : 'Upload and generate'}</button></div>
@@ -150,7 +162,7 @@ function LectureCard({ lecture, onOpen }: { lecture: Lecture; onOpen: () => void
       <div className="lecture-cover"><div className="cover-grid" /><span><FileText size={25} /></span></div>
       <div className="lecture-card-body">
         <div className="card-heading"><div><span className="card-kicker">Lecture</span><h3>{lecture.display_name}</h3></div><ChevronRight size={20} /></div>
-        <div className="badges">{hasPre && <span className="report-badge pre">PRE</span>}{hasPost && <span className="report-badge post">POST</span>}<StatusPill job={latestJob} /></div>
+        <div className="badges">{lecture.lecture_group && <span className="group-badge">{lecture.lecture_group.name}</span>}{hasPre && <span className="report-badge pre">PRE</span>}{hasPost && <span className="report-badge post">POST</span>}<StatusPill job={latestJob} /></div>
         {isProcessingJob(latestJob) && <div className="stage-progress"><div className="stage-progress-meta"><span>{jobDisplayLabel(latestJob)}</span><strong>{latestJob?.progress || 0}%</strong></div><div className="mini-progress"><span style={{ width: `${Math.min(100, Math.max(0, latestJob?.progress || 0))}%` }} /></div></div>}
         <div className="card-footer"><Clock3 size={14} /> {new Date(lecture.created_at).toLocaleDateString()}</div>
       </div>
@@ -160,6 +172,7 @@ function LectureCard({ lecture, onOpen }: { lecture: Lecture; onOpen: () => void
 
 function Dashboard({ session, onOpen }: { session: Session; onOpen: (lecture: Lecture) => void }) {
   const [lectures, setLectures] = useState<Lecture[]>([]);
+  const [groups, setGroups] = useState<LectureGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -170,8 +183,12 @@ function Dashboard({ session, onOpen }: { session: Session; onOpen: (lecture: Le
 
   async function load() {
     setLoading(true);
-    const { data, error } = await supabase.from('lectures').select('*,pipeline_jobs(*)').order('created_at', { ascending: false });
-    if (!error) setLectures((data || []) as Lecture[]);
+    const [lectureResult, groupResult] = await Promise.all([
+      supabase.from('lectures').select('*,pipeline_jobs(*),lecture_group:lecture_groups(id,name)').order('created_at', { ascending: false }),
+      supabase.from('lecture_groups').select('*').order('name'),
+    ]);
+    if (!lectureResult.error) setLectures((lectureResult.data || []) as unknown as Lecture[]);
+    if (!groupResult.error) setGroups((groupResult.data || []) as LectureGroup[]);
     setLoading(false);
   }
 
@@ -204,13 +221,14 @@ function Dashboard({ session, onOpen }: { session: Session; onOpen: (lecture: Le
       <main className="dashboard-shell">
         <section className="dashboard-hero"><div><span className="eyebrow">Lecture workspace</span><h1>Review, refine, and label.</h1><p>Upload pre-lecture slides or continue reviewing your assigned reports.</p></div><button className="primary-button hero-action" onClick={() => setUploadOpen(true)}><Upload size={18} />Upload pre-lecture PDF</button></section>
         <section className="insight-strip"><div><span className="insight-icon"><ShieldCheck size={20} /></span><div><strong>Private by default</strong><span>Files are stored in a protected R2 bucket.</span></div></div><div><span className="insight-icon blue"><RefreshCw size={20} /></span><div><strong>Automatic pipeline</strong><span>New uploads are picked up within one minute.</span></div></div></section>
-        {isAdmin && <section className="admin-panel"><div className="admin-heading"><div><span className="eyebrow">Admin controls</span><h2>Queue and access</h2></div><span>{failedJobs.length} failed jobs</span></div><div className="admin-grid"><div><h3>Retry failed jobs</h3>{failedJobs.length ? failedJobs.map(({ lecture, job }) => <div className="admin-row" key={job.id}><span><strong>{lecture.display_name}</strong><small>{job.error_message || 'Pipeline failed'}</small></span><button className="secondary-button" onClick={() => void retryJob(job.id)}><RefreshCw size={15} />Retry</button></div>) : <p className="muted">No failed jobs.</p>}</div><div><h3>Assign a labeler</h3><label className="field-label">Lecture<select value={adminLecture} onChange={(event) => setAdminLecture(event.target.value)}><option value="">Choose lecture…</option>{lectures.map((lecture) => <option key={lecture.id} value={lecture.id}>{lecture.display_name}</option>)}</select></label><label className="field-label">User UUID<input value={labelerId} onChange={(event) => setLabelerId(event.target.value)} placeholder="Supabase auth user ID" /></label><button className="primary-button" onClick={() => void grantLabeler()}><UserPlus size={16} />Grant labeler access</button></div></div>{adminMessage && <div className="admin-message">{adminMessage}</div>}</section>}
+        {isAdmin && <AdminGroupManager groups={groups} lectures={lectures} onChanged={load} />}
+        {isAdmin && <section className="admin-panel"><div className="admin-heading"><div><span className="eyebrow">Admin controls</span><h2>Queue and access exceptions</h2></div><span>{failedJobs.length} failed jobs</span></div><div className="admin-grid"><div><h3>Retry failed jobs</h3>{failedJobs.length ? failedJobs.map(({ lecture, job }) => <div className="admin-row" key={job.id}><span><strong>{lecture.display_name}</strong><small>{job.error_message || 'Pipeline failed'}</small></span><button className="secondary-button" onClick={() => void retryJob(job.id)}><RefreshCw size={15} />Retry</button></div>) : <p className="muted">No failed jobs.</p>}</div><div><h3>Assign one labeler</h3><p className="muted admin-description">Use this only for an individual exception. Group membership is the default access model.</p><label className="field-label">Lecture<select value={adminLecture} onChange={(event) => setAdminLecture(event.target.value)}><option value="">Choose lecture…</option>{lectures.map((lecture) => <option key={lecture.id} value={lecture.id}>{lecture.display_name}</option>)}</select></label><label className="field-label">User UUID<input value={labelerId} onChange={(event) => setLabelerId(event.target.value)} placeholder="Supabase auth user ID" /></label><button className="primary-button" onClick={() => void grantLabeler()}><UserPlus size={16} />Grant labeler access</button></div></div>{adminMessage && <div className="admin-message">{adminMessage}</div>}</section>}
         <section className="content-section">
           <div className="section-heading"><div><span className="eyebrow">Your library</span><h2>Lectures</h2></div><label className="search-box"><Search size={17} /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search lectures" /></label></div>
           {loading ? <div className="empty-state">Loading your workspace…</div> : visible.length ? <div className="lecture-grid">{visible.map((lecture) => <LectureCard key={lecture.id} lecture={lecture} onOpen={() => onOpen(lecture)} />)}</div> : <div className="empty-state"><FileText size={30} /><h3>No lectures yet</h3><p>Upload your first slide deck to begin.</p></div>}
         </section>
       </main>
-      <UploadDialog open={uploadOpen} onClose={() => setUploadOpen(false)} onCreated={load} />
+      <UploadDialog open={uploadOpen} groups={groups} onClose={() => setUploadOpen(false)} onCreated={load} />
     </>
   );
 }

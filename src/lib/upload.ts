@@ -66,6 +66,7 @@ export async function uploadPreLecture(
   file: File,
   displayName: string,
   onProgress: (percentage: number) => void,
+  groupId?: string | null,
 ): Promise<{ lectureId: string; jobId: string }> {
   if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
     throw new Error('Please choose a PDF file.');
@@ -78,6 +79,7 @@ export async function uploadPreLecture(
       filename: file.name,
       sizeBytes: file.size,
       mimeType: 'application/pdf',
+      groupId: groupId || null,
     },
   });
   if (error || !data) throw new Error(error?.message || 'Could not initialize the upload.');

@@ -25,10 +25,32 @@ export interface Lecture {
   display_name: string;
   created_by: string | null;
   created_source: 'web' | 'staff';
+  group_id: string | null;
   active_pre_run_id: string | null;
   active_post_run_id: string | null;
   created_at: string;
   pipeline_jobs?: PipelineJob[];
+  lecture_group?: Pick<LectureGroup, 'id' | 'name'> | null;
+}
+
+export interface LectureGroup {
+  id: string;
+  name: string;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LectureGroupMember {
+  group_id: string;
+  user_id: string;
+  created_at: string;
+}
+
+export interface WorkspaceUser {
+  user_id: string;
+  email: string;
+  role: 'admin' | 'annotator';
 }
 
 export interface AssetMapping {
@@ -55,6 +77,7 @@ export interface UploadInitResponse {
   jobId: string;
   mappingId: string;
   objectKey: string;
+  groupId?: string | null;
   uploadMode: 'single' | 'multipart';
   uploadUrl?: string;
   uploadId?: string;
