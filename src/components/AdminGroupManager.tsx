@@ -80,14 +80,18 @@ export function AdminGroupManager({ groups, lectures, onChanged }: AdminGroupMan
   }
 
   async function addMember() {
-    if (!selectedGroupId || !selectedUserId) return setMessage('Choose a group and a user.');
-    const user = users.find((item) => item.user_id === selectedUserId);
+    const userId = selectedUserId.trim();
+    if (!selectedGroupId || !userId) return setMessage('Choose a group and enter a user UUID.');
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(userId)) {
+      return setMessage('Enter a valid Supabase user UUID.');
+    }
+    const user = users.find((item) => item.user_id === userId);
     const ok = await run(
       () => supabase.rpc('admin_add_lecture_group_member', {
         p_group_id: selectedGroupId,
-        p_user_id: selectedUserId,
+        p_user_id: userId,
       }),
-      `${user?.email || 'User'} can now access this group.`,
+      `${user?.email || userId} can now access this group.`,
     );
     if (ok) {
       setSelectedUserId('');
@@ -160,12 +164,13 @@ export function AdminGroupManager({ groups, lectures, onChanged }: AdminGroupMan
               </select>
             </label>
             <div className="inline-form member-picker">
-              <select value={selectedUserId} onChange={(event) => setSelectedUserId(event.target.value)}>
-                <option value="">Choose user…</option>
+              <input list="lecmirror-available-users" value={selectedUserId} onChange={(event) => setSelectedUserId(event.target.value)} placeholder="Paste Supabase user UUID" />
+              <datalist id="lecmirror-available-users">
                 {availableUsers.map((user) => <option key={user.user_id} value={user.user_id}>{user.email} · {user.role}</option>)}
-              </select>
+              </datalist>
               <button className="primary-button" disabled={busy || !selectedUserId} onClick={() => void addMember()}>Add</button>
             </div>
+            <small className="field-help member-help">Use the same User UUID accepted by “Assign one labeler”; known users are suggested by email.</small>
             <div className="member-list">
               {groupMembers.length ? groupMembers.map((member) => {
                 const user = users.find((item) => item.user_id === member.user_id);

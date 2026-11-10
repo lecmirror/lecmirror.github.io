@@ -71,6 +71,7 @@ select { width:100%; border:1px solid var(--line); border-radius:11px; padding:1
 .compact-field { margin-top:13px!important; }
 .group-action { margin-top:14px;width:100%; }
 .member-picker { margin-top:13px; }
+.member-help { display:block;margin-top:8px; }
 .member-list { margin-top:15px;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff; }
 .member-row { display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 12px;border-bottom:1px solid #edf0f5; }
 .member-row:last-child { border-bottom:0; }
