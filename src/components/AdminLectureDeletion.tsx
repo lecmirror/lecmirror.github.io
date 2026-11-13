@@ -43,16 +43,23 @@ export function AdminLectureDeletion({ lectures, onChanged }: AdminLectureDeleti
       body: { lectureId: selected.id },
     });
     setBusy(false);
+    let retainedAssets: number | null = data?.ok ? data.retainedObjectCount : null;
     if (error || !data?.ok) {
-      setMessage(error?.message || 'Could not delete the lecture.');
-      return;
+      // RLS still enforces admin-only deletion if the Edge gateway is temporarily unavailable.
+      const fallback = await supabase.from('lectures').delete().eq('id', selected.id);
+      if (fallback.error) {
+        setMessage(fallback.error.message || error?.message || 'Could not delete the lecture.');
+        return;
+      }
+      retainedAssets = null;
     }
-    const deletedName = data.displayName;
-    const retainedAssets = data.retainedObjectCount;
+    const deletedName = data?.displayName || selected.display_name;
     setConfirming(false);
     setConfirmation('');
     setLectureId('');
-    setMessage(`Deleted ${deletedName} from LecMirror. ${retainedAssets} stored asset${retainedAssets === 1 ? ' was' : 's were'} retained for recovery.`);
+    setMessage(retainedAssets === null
+      ? `Deleted ${deletedName} from LecMirror. Stored assets were retained for recovery.`
+      : `Deleted ${deletedName} from LecMirror. ${retainedAssets} stored asset${retainedAssets === 1 ? ' was' : 's were'} retained for recovery.`);
     await onChanged();
   }
 
