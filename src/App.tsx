@@ -182,21 +182,21 @@ function Dashboard({ session, onOpen }: { session: Session; onOpen: (lecture: Le
   const [labelerId, setLabelerId] = useState('');
   const [adminMessage, setAdminMessage] = useState('');
 
-  async function load() {
-    setLoading(true);
+  async function load(showLoading = false) {
+    if (showLoading) setLoading(true);
     const [lectureResult, groupResult] = await Promise.all([
       supabase.from('lectures').select('*,pipeline_jobs(*),lecture_group:lecture_groups(id,name)').order('created_at', { ascending: false }),
       supabase.from('lecture_groups').select('*').order('name'),
     ]);
     if (!lectureResult.error) setLectures((lectureResult.data || []) as unknown as Lecture[]);
     if (!groupResult.error) setGroups((groupResult.data || []) as LectureGroup[]);
-    setLoading(false);
+    if (showLoading) setLoading(false);
   }
 
   useEffect(() => {
-    void load();
+    void load(true);
     void supabase.from('user_roles').select('role').eq('user_id', session.user.id).maybeSingle().then(({ data }) => setIsAdmin(data?.role === 'admin'));
-    const channel = supabase.channel('lecmirror-dashboard').on('postgres_changes', { event: '*', schema: 'public', table: 'pipeline_jobs' }, () => void load()).subscribe();
+    const channel = supabase.channel('lecmirror-dashboard').on('postgres_changes', { event: '*', schema: 'public', table: 'pipeline_jobs' }, () => void load(false)).subscribe();
     return () => { void supabase.removeChannel(channel); };
   }, []);
 
