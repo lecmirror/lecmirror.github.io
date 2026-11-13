@@ -11,7 +11,7 @@ interface AdminLectureDeletionProps {
 interface DeleteResponse {
   ok: boolean;
   displayName: string;
-  deletedObjectCount: number;
+  retainedObjectCount: number;
 }
 
 export function AdminLectureDeletion({ lectures, onChanged }: AdminLectureDeletionProps) {
@@ -48,18 +48,18 @@ export function AdminLectureDeletion({ lectures, onChanged }: AdminLectureDeleti
       return;
     }
     const deletedName = data.displayName;
-    const deletedAssets = data.deletedObjectCount;
+    const retainedAssets = data.retainedObjectCount;
     setConfirming(false);
     setConfirmation('');
     setLectureId('');
-    setMessage(`Deleted ${deletedName} and ${deletedAssets} stored asset${deletedAssets === 1 ? '' : 's'}.`);
+    setMessage(`Deleted ${deletedName} from LecMirror. ${retainedAssets} stored asset${retainedAssets === 1 ? ' was' : 's were'} retained for recovery.`);
     await onChanged();
   }
 
   return (
     <div className="admin-danger-zone">
       <h3>Delete a lecture</h3>
-      <p className="muted admin-description">Permanently removes the lecture, reports, ratings, jobs, and its files from the new R2 bucket.</p>
+      <p className="muted admin-description">Removes the lecture, reports, ratings, jobs, and access records. Stored files are retained for recovery.</p>
       <label className="field-label">Lecture
         <select value={lectureId} onChange={(event) => { setLectureId(event.target.value); setMessage(''); }}>
           <option value="">Choose lecture…</option>
